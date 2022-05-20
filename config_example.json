@@ -1,0 +1,13 @@
+{
+    "title": "Template file containing all configuration",
+    "octane": {
+        "server": "http://localhost:8080",
+        "sharedSpace": 1001,
+        "workspace": 1002,
+        "user": "user",
+        "password": "pwd",
+        "headers": {
+            "ALM_OCTANE_TECH_PREVIEW": true
+        }
+    }
+}

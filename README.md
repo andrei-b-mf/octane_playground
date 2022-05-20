@@ -1,0 +1,1 @@
+Place config.json in ./conf/ based on the config_example.json
