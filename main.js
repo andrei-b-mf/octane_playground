@@ -2,6 +2,7 @@
 
 import { initConf } from './conf.js';
 import { Octane } from '@microfocus/alm-octane-js-rest-sdk';
+import { writeFileSync } from 'fs';
 
 class Main {
     SHAREDSPACE_ENTITIES_METADATA_URL = '/api/shared_spaces/1001/metadata/entities?show_all=true';
@@ -58,9 +59,50 @@ class Main {
         const workspaceEntitiesNames = this.extractNames(workspaceEntitiesMetadata);
 
         const commandsPerSharedspaceEntityType = await this.gatherCommands(octaneRestClient, sharedspaceEntitiesNames);
-        const commandsPerWorkspaceEntityType = await this.gatherCommands(octaneRestClient, workspaceEntitiesNames);
+        let commandsCountPerEntityTypeOnSharedSpace = this.detectDuplicateCommandsPerService(commandsPerSharedspaceEntityType);
+        this.generateReport(commandsCountPerEntityTypeOnSharedSpace, 'sharedspaceCommands.json');
 
-        
+        const commandsPerWorkspaceEntityType = await this.gatherCommands(octaneRestClient, workspaceEntitiesNames);
+        let commandsCountPerEntityTypeOnWorkSpace = this.detectDuplicateCommandsPerService(commandsPerWorkspaceEntityType);
+        this.generateReport(commandsCountPerEntityTypeOnWorkSpace, 'workspaceCommands.json');
+    }
+
+    detectDuplicateCommandsPerService(commandsPerEntityType) {
+        let result = {};
+        for(const [key, value] of Object.entries(commandsPerEntityType)) {
+            result[key] = {};
+
+            for(let i = 0; i < value.length; i++) {
+                const resultKey = value[i].service;
+                result[key][resultKey] = {};
+
+                for(let j = 0; j < value[i].commands.length; j++) {
+                    let command = value[i].commands[j];
+
+                    if(result[key][resultKey][command.name]) {
+                        result[key][resultKey][command.name] = result[key][resultKey][command.name] + 1;
+                    } else {
+                        result[key][resultKey][command.name] = 1;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    generateReport(commandsCountPerEntityTypeOnSpace, reportName, logToConsole) {
+        let json = JSON.stringify(commandsCountPerEntityTypeOnSpace);
+
+        if(logToConsole) {
+            console.log(json);
+        }
+
+        try {
+            writeFileSync('./' + reportName, json);
+        } catch(e) {
+            console.log('Could not generate report: ' + reportName);
+        }
     }
 }
 
