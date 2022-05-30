@@ -1,3 +1,5 @@
 node_modules
 .git
 conf
+/sharedspaceCommands.json
+/workspaceCommands.json

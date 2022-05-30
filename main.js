@@ -9,29 +9,33 @@ class Main {
     WORKSPACE_ENTITIES_METADATA_URL = '/api/shared_spaces/1001/workspaces/1002/metadata/entities?show_all=true';
     COMMANDS_PER_ENTITYTYPE_URL = '/admin/metadata/commands?entity=PLACEHOLDER&flavor=DEFAULT';
 
-    extractNames(metadata) {
-        let names = metadata.data.filter(e => {
+    prepareCommandRequestEntityMetadata(metadata) {
+        let requestEntityMetadata = metadata.data.map(e => {
             let isAggregated = e.features.filter(f => f.name == 'subtypes').length > 0;
             if(isAggregated) {
-                console.log('Filtering out \'' + e.name + '\' because it is aggregated and will fail at command retrieval as it is not supported');
+                console.log('Setting Read request only for entity type \'' + e.name + '\' because it is aggregated and will fail CUD commands construction');
             }
 
-            return !isAggregated;
-        }).map(e => e.name);
+            return {
+                name: e.name,
+                isAggregated: isAggregated,
+                commands: isAggregated ? "&service=Read" : "&service=Create&service=Update&service=Delete&service=Read"
+            };
+        });
 
-        return names;
+        return requestEntityMetadata;
     }
 
-    async gatherCommands(octaneRestClient, entityNames) {
+    async gatherCommands(octaneRestClient, commandsRequestMetadata) {
         let commandsPerEntityType = [];
-        for (const element of entityNames) {
-            const commandsUrl = this.COMMANDS_PER_ENTITYTYPE_URL.replace('PLACEHOLDER', element);
+        for (const commandRequestMetadata of commandsRequestMetadata) {
+            const commandsUrl = this.COMMANDS_PER_ENTITYTYPE_URL.replace('PLACEHOLDER', commandRequestMetadata.name) + commandRequestMetadata.commands;
 
             try {
                 let commands = await octaneRestClient.executeCustomRequest(commandsUrl, Octane.operationTypes.get, undefined, { 'ALM-OCTANE-TECH-PREVIEW': true });
-                commandsPerEntityType[element] = commands;
+                commandsPerEntityType[commandRequestMetadata.name] = commands;
             } catch(e) {
-                console.log('Could not retrieve commands for \'' + element + '\'');
+                console.log('Could not retrieve commands for \'' + commandRequestMetadata.name + '\'');
                 console.log('Status: ' + e.response.status + '\nResponse data: ');
                 console.log(e.response.data);
             }
@@ -55,16 +59,16 @@ class Main {
         let sharedspaceEntitiesMetadata = await octaneRestClient.executeCustomRequest(this.SHAREDSPACE_ENTITIES_METADATA_URL, Octane.operationTypes.get, undefined, { 'ALM-OCTANE-TECH-PREVIEW': true });
         let workspaceEntitiesMetadata = await octaneRestClient.executeCustomRequest(this.WORKSPACE_ENTITIES_METADATA_URL, Octane.operationTypes.get, undefined, { 'ALM-OCTANE-TECH-PREVIEW': true });
 
-        const sharedspaceEntitiesNames = this.extractNames(sharedspaceEntitiesMetadata);
-        const workspaceEntitiesNames = this.extractNames(workspaceEntitiesMetadata);
+        const sharedspaceCommandsRequestEntityMetadata = this.prepareCommandRequestEntityMetadata(sharedspaceEntitiesMetadata);
+        const workspaceCommandRequestEntityMetadata = this.prepareCommandRequestEntityMetadata(workspaceEntitiesMetadata);
 
-        const commandsPerSharedspaceEntityType = await this.gatherCommands(octaneRestClient, sharedspaceEntitiesNames);
-        let commandsCountPerEntityTypeOnSharedSpace = this.detectDuplicateCommandsPerService(commandsPerSharedspaceEntityType);
-        this.generateReport(commandsCountPerEntityTypeOnSharedSpace, 'sharedspaceCommands.json');
+        const sharedspaceEntityTypesCommands = await this.gatherCommands(octaneRestClient, sharedspaceCommandsRequestEntityMetadata);
+        let sharedspaceEntityTypesCommandsCount = this.detectDuplicateCommandsPerService(sharedspaceEntityTypesCommands);
+        this.generateReport(sharedspaceEntityTypesCommandsCount, 'sharedspaceCommands.json');
 
-        const commandsPerWorkspaceEntityType = await this.gatherCommands(octaneRestClient, workspaceEntitiesNames);
-        let commandsCountPerEntityTypeOnWorkSpace = this.detectDuplicateCommandsPerService(commandsPerWorkspaceEntityType);
-        this.generateReport(commandsCountPerEntityTypeOnWorkSpace, 'workspaceCommands.json');
+        const workspaceEntityTypesCommands = await this.gatherCommands(octaneRestClient, workspaceCommandRequestEntityMetadata);
+        let workSpaceEntityTypesCommandsCount = this.detectDuplicateCommandsPerService(workspaceEntityTypesCommands);
+        this.generateReport(workSpaceEntityTypesCommandsCount, 'workspaceCommands.json');
     }
 
     detectDuplicateCommandsPerService(commandsPerEntityType) {
