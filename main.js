@@ -19,7 +19,7 @@ class Main {
             return {
                 name: e.name,
                 isAggregated: isAggregated,
-                commands: isAggregated ? "&service=Read" : "&service=Create&service=Update&service=Delete&service=Read"
+                commands: isAggregated ? "&service=Read&service=GroupRead" : "&service=Create&service=Update&service=Delete&service=Read&service=GroupRead"
             };
         });
 
